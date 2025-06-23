@@ -11,7 +11,7 @@ soundfile>=0.12.1
 
 # Cross-platform GUI and automation
 pynput>=1.7.6
-tkinter
+# tkinter (included with Python standard library)
 
 # Platform-specific dependencies (Linux)
 python-xlib>=0.33; sys_platform == "linux"
