@@ -220,6 +220,23 @@ class CommandProcessor:
             "help"
         ))
     
+        # Text input commands
+        self._register_command(Command(
+            "type_text",
+            [r"type (.+)", r"write (.+)", r"input (.+)"],
+            self._type_text,
+            "Type the specified text",
+            "input"
+        ))
+        
+        self._register_command(Command(
+            "press_key",
+            [r"press (.+)", r"hit (.+)", r"key (.+)"],
+            self._press_key,
+            "Press the specified key",
+            "input"
+        ))
+        
     def _register_command(self, command: Command):
         """Register a command in the command registry"""
         self.commands[command.name] = command
@@ -478,3 +495,33 @@ class CommandProcessor:
                 categories[command.category] = []
             categories[command.category].append(command)
         return categories
+    
+    async def _type_text(self, text: str):
+        """Type the specified text"""
+        try:
+            await self.keystroke_manager.type_text(text)
+            self.logger.info(f"Typed text: {text}")
+        except Exception as e:
+            self.logger.error(f"Failed to type text '{text}': {e}")
+    
+    async def _press_key(self, key: str):
+        """Press the specified key or key combination"""
+        try:
+            # Handle key combinations like "ctrl a", "shift enter", etc.
+            if ' ' in key:
+                parts = key.split()
+                if len(parts) == 2:
+                    modifier, main_key = parts
+                    await self.keystroke_manager.send_key(main_key, [modifier])
+                else:
+                    # Multiple modifiers: ctrl shift a
+                    main_key = parts[-1]
+                    modifiers = parts[:-1]
+                    await self.keystroke_manager.send_key(main_key, modifiers)
+            else:
+                # Single key
+                await self.keystroke_manager.send_key(key)
+            
+            self.logger.info(f"Pressed key: {key}")
+        except Exception as e:
+            self.logger.error(f"Failed to press key '{key}': {e}")

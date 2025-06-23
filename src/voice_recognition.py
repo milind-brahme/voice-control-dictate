@@ -193,3 +193,35 @@ class VoiceRecognizer:
                     'sample_rate': info['defaultSampleRate']
                 })
         return devices
+    
+    def _get_audio_devices(self):
+        """Get list of available audio input devices"""
+        devices = []
+        try:
+            for i in range(self.audio.get_device_count()):
+                device_info = self.audio.get_device_info_by_index(i)
+                if device_info['maxInputChannels'] > 0:  # Input device
+                    devices.append({
+                        'index': i,
+                        'name': device_info['name'],
+                        'channels': device_info['maxInputChannels']
+                    })
+        except Exception as e:
+            self.logger.error(f"Error getting audio devices: {e}")
+        return devices
+    
+    async def transcribe_file(self, file_path: str) -> str:
+        """Transcribe audio from a file"""
+        try:
+            self.logger.info(f"Transcribing file: {file_path}")
+            
+            # Use whisper to transcribe the file directly
+            result = self.model.transcribe(file_path)
+            text = result["text"].strip()
+            
+            self.logger.info(f"Transcription result: {text}")
+            return text
+            
+        except Exception as e:
+            self.logger.error(f"Error transcribing file {file_path}: {e}")
+            return ""
