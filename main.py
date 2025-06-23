@@ -37,15 +37,45 @@ async def main():
                        default='INFO', help='Logging level')
     parser.add_argument('--dictation-mode', action='store_true',
                        help='Start in dictation mode')
+    parser.add_argument('--list-devices', action='store_true',
+                       help='List available audio input devices and exit')
+    parser.add_argument('--device', type=int, default=None,
+                       help='Audio input device index to use')
     
     args = parser.parse_args()
     
     setup_logging(args.log_level)
     logger = logging.getLogger(__name__)
     
+    # Handle device listing
+    if args.list_devices:
+        config = Config(args.config)
+        recognizer = VoiceRecognizer(config)
+        devices = recognizer.list_audio_devices()
+        
+        print("\n🎤 Available Audio Input Devices:")
+        print("-" * 60)
+        for device in devices:
+            print(f"{device['index']:2d}: {device['name']}")
+            print(f"    Channels: {device['channels']}, Sample Rate: {int(device['sample_rate'])} Hz")
+        print("-" * 60)
+        print("Use --device <number> to select a specific device")
+        return
+    
     try:
         # Load configuration
         config = Config(args.config)
+        
+        # Set audio device if specified
+        if args.device is not None:
+            config.set('audio.input_device', args.device)
+            logger.info(f"Using audio device: {args.device}")
+        
+        # CLI device selection if in CLI mode and no device specified
+        if args.mode == 'cli' and args.device is None:
+            selected_device = await select_audio_device_cli(config)
+            if selected_device is not None:
+                config.set('audio.input_device', selected_device)
         
         # Initialize components
         voice_recognizer = VoiceRecognizer(config)
@@ -93,6 +123,59 @@ async def run_command_mode(voice_recognizer, command_processor):
                 await command_processor.process_command(text)
     except KeyboardInterrupt:
         logger.info("Command mode stopped by user")
+
+async def select_audio_device_cli(config):
+    """CLI function to select audio device interactively"""
+    
+    try:
+        recognizer = VoiceRecognizer(config)
+        devices = recognizer.list_audio_devices()
+        
+        if not devices:
+            print("❌ No audio input devices found!")
+            return None
+        
+        print("\n🎤 Available Audio Input Devices:")
+        print("-" * 60)
+        for device in devices:
+            print(f"{device['index']:2d}: {device['name']}")
+            print(f"    Channels: {device['channels']}, Sample Rate: {int(device['sample_rate'])} Hz")
+        print("-" * 60)
+        
+        # Auto-detect eMeet microphone
+        emeet_device = None
+        for device in devices:
+            if 'emeet' in device['name'].lower() or 'm0' in device['name'].lower():
+                emeet_device = device
+                break
+        
+        if emeet_device:
+            print(f"🎙️  eMeet microphone detected: {emeet_device['name']} (Device {emeet_device['index']})")
+            response = input("Use eMeet microphone? (Y/n): ").strip().lower()
+            if response in ['', 'y', 'yes']:
+                return emeet_device['index']
+        
+        # Manual selection
+        default_msg = "default device" if not emeet_device else f"eMeet device ({emeet_device['index']})"
+        prompt = f"\nEnter device number (0-{len(devices)-1}) or press Enter for {default_msg}: "
+        
+        user_input = input(prompt).strip()
+        
+        if user_input == "":
+            return emeet_device['index'] if emeet_device else None
+        
+        device_index = int(user_input)
+        if 0 <= device_index < len(devices):
+            selected_device = devices[device_index]
+            print(f"✅ Selected: {selected_device['name']}")
+            return device_index
+        else:
+            print(f"❌ Invalid device number. Using default.")
+            return None
+            
+    except (ValueError, KeyboardInterrupt, Exception) as e:
+        print(f"❌ Device selection error: {e}")
+        return None
 
 if __name__ == "__main__":
     asyncio.run(main())

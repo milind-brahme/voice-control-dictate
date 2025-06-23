@@ -151,8 +151,7 @@ class CommandProcessor:
             lambda: self.keystroke_manager.send_key_combination("ctrl+z"),
             "Undo last action",
             "shortcuts"
-        ))
-        
+        ))        
         self._register_command(Command(
             "redo",
             ["redo", "redo that"],
@@ -167,6 +166,14 @@ class CommandProcessor:
             lambda: self.keystroke_manager.send_key_combination("ctrl+a"),
             "Select all text",
             "shortcuts"
+        ))        
+        # Text input
+        self._register_command(Command(
+            "type_text",
+            [r"type (.+)", r"write (.+)", r"input (.+)"],
+            self._type_text,
+            "Type the specified text",
+            "text"
         ))
         
         # Navigation
@@ -292,29 +299,51 @@ class CommandProcessor:
             # Otherwise, type the text
             await self.keystroke_manager.type_text(text + " ")
             return
-        
-        # Check for wake word activation
+          # Check for wake word activation
         if not self._has_wake_word(text):
+            self.logger.debug(f"No wake word found in: '{text}' - ignoring")
             return
-            
-        # Remove wake words from text
+              # Remove wake words from text
         command_text = self._remove_wake_words(text)
+        self.logger.debug(f"After removing wake words: '{command_text}'")
         
         # Try to match and execute command
-        await self._execute_command(command_text)
+        command_executed = await self._execute_command(command_text)
+        
+        # If no command was executed and we're not in dictation mode, 
+        # do NOT type the remaining text as that causes the duplication issue
+        if not command_executed:
+            self.logger.debug(f"No command matched for '{command_text}' - not typing as text")
     
     def _has_wake_word(self, text: str) -> bool:
         """Check if text contains a wake word"""
-        return any(wake_word in text for wake_word in self.wake_words)
+        text_words = text.split()
+        for wake_word in self.wake_words:
+            wake_word_parts = wake_word.split()
+            # Check if all parts of the wake word are present in sequence
+            for i in range(len(text_words) - len(wake_word_parts) + 1):
+                if text_words[i:i+len(wake_word_parts)] == wake_word_parts:
+                    self.logger.debug(f"Found wake word '{wake_word}' in text")
+                    return True
+        return False
     
     def _remove_wake_words(self, text: str) -> str:
         """Remove wake words from text"""
+        text_words = text.split()
         for wake_word in self.wake_words:
-            text = text.replace(wake_word, "").strip()
-        return text
+            wake_word_parts = wake_word.split()
+            # Find and remove wake word sequence
+            for i in range(len(text_words) - len(wake_word_parts) + 1):
+                if text_words[i:i+len(wake_word_parts)] == wake_word_parts:
+                    # Remove the wake word parts
+                    text_words = text_words[:i] + text_words[i+len(wake_word_parts):]
+                    break
+        return " ".join(text_words).strip()
     
     async def _execute_command(self, text: str):
         """Execute a matched command"""
+        command_executed = False
+        
         for command in self.commands.values():
             for pattern in command.patterns:
                 # Try regex match first
@@ -322,34 +351,40 @@ class CommandProcessor:
                     match = re.search(pattern, text, re.IGNORECASE)
                     if match:
                         try:
+                            self.logger.debug(f"Regex match found for pattern '{pattern}' in command '{command.name}'")
                             if asyncio.iscoroutinefunction(command.handler):
                                 await command.handler(*match.groups())
                             else:
                                 await asyncio.get_event_loop().run_in_executor(
                                     None, command.handler, *match.groups()
                                 )
-                            self.logger.info(f"Executed command: {command.name}")
-                            return
+                            self.logger.info(f"Successfully executed command: {command.name} with args: {match.groups()}")
+                            command_executed = True
+                            return True  # Return True to indicate command was executed
                         except Exception as e:
                             self.logger.error(f"Error executing command '{command.name}': {e}")
-                            return
+                            return False
                 
                 # Try exact match
                 elif pattern in text:
                     try:
+                        self.logger.debug(f"Exact match found for pattern '{pattern}' in command '{command.name}'")
                         if asyncio.iscoroutinefunction(command.handler):
                             await command.handler()
                         else:
                             await asyncio.get_event_loop().run_in_executor(
                                 None, command.handler
                             )
-                        self.logger.info(f"Executed command: {command.name}")
-                        return
+                        self.logger.info(f"Successfully executed command: {command.name}")
+                        command_executed = True
+                        return True  # Return True to indicate command was executed
                     except Exception as e:
                         self.logger.error(f"Error executing command '{command.name}': {e}")
-                        return
+                        return False
         
-        self.logger.warning(f"No command found for: {text}")
+        if not command_executed:
+            self.logger.debug(f"No command found for: '{text}'")
+        return False  # Return False to indicate no command was executed
     
     # Command handlers
     async def _start_dictation(self):

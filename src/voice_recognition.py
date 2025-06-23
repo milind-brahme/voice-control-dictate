@@ -25,6 +25,7 @@ class VoiceRecognizer:
         self.chunk_size = config.get('audio.chunk_size', 1024)
         self.channels = config.get('audio.channels', 1)
         self.format = pyaudio.paInt16
+        self.input_device = config.get('audio.input_device', None)  # Add device selection
         
         # Whisper settings
         model_size = config.get('whisper.model_size', 'base')
@@ -43,11 +44,19 @@ class VoiceRecognizer:
         self.silence_duration = config.get('audio.silence_duration', 2.0)
         self.min_audio_length = config.get('audio.min_audio_length', 1.0)
         
+        # Log selected audio device
+        if self.input_device is not None:
+            try:
+                device_info = self.audio.get_device_info_by_index(self.input_device)
+                self.logger.info(f"Using audio input device {self.input_device}: {device_info['name']}")
+            except Exception as e:
+                self.logger.warning(f"Could not get info for device {self.input_device}: {e}")
+                self.input_device = None
+        
     def __del__(self):
         """Cleanup audio resources"""
         if hasattr(self, 'audio'):
-            self.audio.terminate()
-    
+            self.audio.terminate()    
     def _audio_callback(self, in_data, frame_count, time_info, status):
         """Callback for audio stream"""
         if self.is_recording:
@@ -56,8 +65,23 @@ class VoiceRecognizer:
     
     def _calculate_volume(self, audio_data):
         """Calculate RMS volume of audio data"""
-        audio_np = np.frombuffer(audio_data, dtype=np.int16)
-        return np.sqrt(np.mean(audio_np**2))
+        try:
+            if not audio_data:
+                return 0.0
+            
+            audio_np = np.frombuffer(audio_data, dtype=np.int16)
+            if len(audio_np) == 0:
+                return 0.0
+            
+            # Calculate RMS with proper error handling
+            mean_square = np.mean(audio_np.astype(np.float64)**2)
+            if mean_square < 0 or np.isnan(mean_square) or np.isinf(mean_square):
+                return 0.0
+            
+            return np.sqrt(mean_square)
+        except Exception as e:
+            self.logger.warning(f"Error calculating volume: {e}")
+            return 0.0
     
     async def _record_audio_segment(self) -> Optional[bytes]:
         """Record an audio segment with voice activity detection"""
@@ -66,6 +90,7 @@ class VoiceRecognizer:
             channels=self.channels,
             rate=self.sample_rate,
             input=True,
+            input_device_index=self.input_device,  # Use selected device
             frames_per_buffer=self.chunk_size,
             stream_callback=self._audio_callback
         )
@@ -206,8 +231,7 @@ class VoiceRecognizer:
                         'name': device_info['name'],
                         'channels': device_info['maxInputChannels']
                     })
-        except Exception as e:
-            self.logger.error(f"Error getting audio devices: {e}")
+        except Exception as e:            self.logger.error(f"Error getting audio devices: {e}")
         return devices
     
     async def transcribe_file(self, file_path: str) -> str:
@@ -215,8 +239,11 @@ class VoiceRecognizer:
         try:
             self.logger.info(f"Transcribing file: {file_path}")
             
-            # Use whisper to transcribe the file directly
-            result = self.model.transcribe(file_path)
+            # Use whisper to transcribe the file directly with configured language
+            result = self.model.transcribe(
+                file_path,
+                language=self.config.get('whisper.language', None)
+            )
             text = result["text"].strip()
             
             self.logger.info(f"Transcription result: {text}")

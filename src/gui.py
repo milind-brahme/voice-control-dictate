@@ -9,6 +9,9 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
 import threading
 from typing import Optional
+import pyaudio
+import numpy as np
+import time
 
 class VoiceControlGUI:
     def __init__(self, voice_recognizer, command_processor, config):
@@ -20,6 +23,11 @@ class VoiceControlGUI:
         # GUI state
         self.is_listening = False
         self.recognition_task = None
+        
+        # Audio meter state
+        self.audio_monitor_active = False
+        self.audio_monitor_thread = None
+        self.current_audio_level = 0
         
         # Create main window
         self.root = tk.Tk()
@@ -167,33 +175,49 @@ class VoiceControlGUI:
     
     def _create_audio_settings(self, parent):
         """Create audio settings widgets"""
+        # Audio device selection
+        ttk.Label(parent, text="Audio Input Device:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        self.audio_device_var = tk.StringVar()
+        self.audio_device_combo = ttk.Combobox(
+            parent, textvariable=self.audio_device_var,
+            state="readonly", width=40
+        )
+        self.audio_device_combo.grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
+        
+        # Refresh devices button
+        refresh_button = ttk.Button(parent, text="Refresh Devices", command=self._refresh_audio_devices)
+        refresh_button.grid(row=0, column=2, sticky=tk.W, padx=5, pady=5)
+        
         # Sample rate
-        ttk.Label(parent, text="Sample Rate:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(parent, text="Sample Rate:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
         self.sample_rate_var = tk.StringVar(value=str(self.config.get('audio.sample_rate', 16000)))
         sample_rate_combo = ttk.Combobox(
             parent, textvariable=self.sample_rate_var,
             values=["8000", "16000", "22050", "44100", "48000"],
             state="readonly"
         )
-        sample_rate_combo.grid(row=0, column=1, sticky=tk.W, padx=5, pady=5)
+        sample_rate_combo.grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
         
         # Silence threshold
-        ttk.Label(parent, text="Silence Threshold:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(parent, text="Silence Threshold:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
         self.silence_threshold_var = tk.DoubleVar(value=self.config.get('audio.silence_threshold', 500))
         silence_threshold_scale = ttk.Scale(
             parent, from_=100, to=1000, variable=self.silence_threshold_var,
             orient=tk.HORIZONTAL, length=200
         )
-        silence_threshold_scale.grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
+        silence_threshold_scale.grid(row=2, column=1, sticky=tk.W, padx=5, pady=5)
         
         # Silence duration
-        ttk.Label(parent, text="Silence Duration (s):").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
+        ttk.Label(parent, text="Silence Duration (s):").grid(row=3, column=0, sticky=tk.W, padx=5, pady=5)
         self.silence_duration_var = tk.DoubleVar(value=self.config.get('audio.silence_duration', 2.0))
         silence_duration_scale = ttk.Scale(
             parent, from_=0.5, to=5.0, variable=self.silence_duration_var,
             orient=tk.HORIZONTAL, length=200
         )
-        silence_duration_scale.grid(row=2, column=1, sticky=tk.W, padx=5, pady=5)
+        silence_duration_scale.grid(row=3, column=1, sticky=tk.W, padx=5, pady=5)
+        
+        # Initialize device list
+        self._refresh_audio_devices()
     
     def _create_whisper_settings(self, parent):
         """Create Whisper settings widgets"""
@@ -209,9 +233,21 @@ class VoiceControlGUI:
         
         # Language
         ttk.Label(parent, text="Language:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
-        self.language_var = tk.StringVar(value=self.config.get('whisper.language', 'auto'))
-        language_entry = ttk.Entry(parent, textvariable=self.language_var)
-        language_entry.grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
+        self.language_var = tk.StringVar(value=self.config.get('whisper.language', 'en'))
+        language_combo = ttk.Combobox(
+            parent, textvariable=self.language_var,
+            values=["en", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh", "auto"],
+            state="readonly", width=15
+        )
+        language_combo.grid(row=1, column=1, sticky=tk.W, padx=5, pady=5)
+        
+        # Language help text
+        language_help = ttk.Label(
+            parent, 
+            text="Language codes: en=English, es=Spanish, fr=French, de=German, auto=Auto-detect",
+            font=("Arial", 8)
+        )
+        language_help.grid(row=2, column=0, columnspan=2, sticky=tk.W, padx=5, pady=(0,10))
     
     def _create_commands_settings(self, parent):
         """Create commands settings widgets"""
@@ -225,7 +261,7 @@ class VoiceControlGUI:
         
         # Save button
         save_button = ttk.Button(parent, text="Save Settings", command=self._save_settings)
-        save_button.grid(row=3, column=1, sticky=tk.W, padx=5, pady=20)
+        save_button.grid(row=4, column=1, sticky=tk.W, padx=5, pady=20)
     
     def _create_log_tab(self):
         """Create log viewing tab"""
@@ -283,6 +319,7 @@ class VoiceControlGUI:
             
             # Start recognition in separate thread
             self.recognition_task = asyncio.create_task(self._recognition_loop())
+            self._start_audio_monitor()
             
         except Exception as e:
             self.logger.error(f"Failed to start listening: {e}")
@@ -297,7 +334,8 @@ class VoiceControlGUI:
             
             if self.recognition_task:
                 self.recognition_task.cancel()
-                
+            self._stop_audio_monitor()
+            
         except Exception as e:
             self.logger.error(f"Failed to stop listening: {e}")
     
@@ -325,12 +363,109 @@ class VoiceControlGUI:
                     self.recognition_text.see(tk.END)
                     
                     # Process command
-                    await self.command_processor.process_command(text)
+                    await self._process_recognition(text)
                     
         except Exception as e:
             self.logger.error(f"Recognition loop error: {e}")
-            self._stop_listening()
     
+    async def _process_recognition(self, text: str):
+        """Process recognized text through command processor"""
+        try:
+            # Process the recognized text through the command processor
+            await self.command_processor.process_command(text)
+        except Exception as e:
+            self.logger.error(f"Command processing error: {e}")
+            # Show error in GUI
+            self.recognition_text.insert(tk.END, f"Error processing command: {e}\n")
+            self.recognition_text.see(tk.END)
+    
+    def _start_audio_monitor(self):
+        """Start audio level monitoring"""
+        if not self.audio_monitor_active:
+            self.audio_monitor_active = True
+            self.audio_monitor_thread = threading.Thread(target=self._audio_monitor_loop, daemon=True)
+            self.audio_monitor_thread.start()
+            
+            # Start GUI update timer
+            self._update_audio_meter()
+    
+    def _stop_audio_monitor(self):
+        """Stop audio level monitoring"""
+        self.audio_monitor_active = False
+        if self.audio_monitor_thread:
+            self.audio_monitor_thread.join(timeout=1.0)
+    
+    def _audio_monitor_loop(self):
+        """Audio monitoring loop running in separate thread"""
+        try:
+            # Get audio settings
+            sample_rate = self.config.get('audio.sample_rate', 16000)
+            chunk_size = self.config.get('audio.chunk_size', 1024)
+            device_index = self.config.get('audio.input_device', None)
+            
+            # Initialize PyAudio
+            audio = pyaudio.PyAudio()
+            
+            try:
+                # Open audio stream
+                stream = audio.open(
+                    format=pyaudio.paInt16,
+                    channels=1,
+                    rate=sample_rate,
+                    input=True,
+                    input_device_index=device_index,
+                    frames_per_buffer=chunk_size
+                )
+                
+                while self.audio_monitor_active:
+                    try:
+                        # Read audio data
+                        data = stream.read(chunk_size, exception_on_overflow=False)
+                        
+                        # Calculate volume level with robust error handling
+                        audio_np = np.frombuffer(data, dtype=np.int16)
+                        if len(audio_np) > 0:
+                            try:
+                                # Calculate RMS with proper error handling
+                                mean_square = np.mean(audio_np.astype(np.float64)**2)
+                                if mean_square < 0 or np.isnan(mean_square) or np.isinf(mean_square):
+                                    rms = 0.0
+                                else:
+                                    rms = np.sqrt(mean_square)
+                                # Normalize to 0-100 scale
+                                self.current_audio_level = min(100, (rms / 3000) * 100)
+                            except Exception:
+                                self.current_audio_level = 0
+                        else:
+                            self.current_audio_level = 0
+                            
+                    except Exception as e:
+                        self.logger.debug(f"Audio monitor read error: {e}")
+                        time.sleep(0.1)
+                        
+            finally:
+                if 'stream' in locals():
+                    stream.stop_stream()
+                    stream.close()
+                audio.terminate()
+                
+        except Exception as e:
+            self.logger.error(f"Audio monitor error: {e}")
+            self.current_audio_level = 0
+    
+    def _update_audio_meter(self):
+        """Update the audio meter in the GUI"""
+        try:
+            # Update progress bar
+            self.audio_level.config(value=self.current_audio_level)
+            
+            # Schedule next update if monitoring is active
+            if self.audio_monitor_active:
+                self.root.after(50, self._update_audio_meter)  # Update every 50ms
+                
+        except Exception as e:
+            self.logger.debug(f"Audio meter update error: {e}")
+            
     def _save_settings(self):
         """Save current settings"""
         try:
@@ -338,6 +473,14 @@ class VoiceControlGUI:
             self.config.set('audio.sample_rate', int(self.sample_rate_var.get()))
             self.config.set('audio.silence_threshold', self.silence_threshold_var.get())
             self.config.set('audio.silence_duration', self.silence_duration_var.get())
+            
+            # Save selected audio device
+            selected_device = self._get_selected_device_index()
+            self.config.set('audio.input_device', selected_device)
+            if selected_device is not None:
+                self.logger.info(f"Audio device set to: {selected_device}")
+            else:
+                self.logger.info("Audio device set to: Default")
             
             # Save Whisper settings
             self.config.set('whisper.model_size', self.model_size_var.get())
@@ -348,7 +491,7 @@ class VoiceControlGUI:
             wake_words = [w.strip() for w in self.wake_words_var.get().split(',') if w.strip()]
             self.config.set('commands.wake_words', wake_words)
             
-            messagebox.showinfo("Success", "Settings saved successfully!")
+            messagebox.showinfo("Success", "Settings saved successfully!\nRestart the application to apply audio device changes.")
             
         except Exception as e:
             self.logger.error(f"Failed to save settings: {e}")
@@ -392,3 +535,56 @@ class VoiceControlGUI:
                 await asyncio.sleep(0.01)
         except Exception as e:
             self.logger.error(f"GUI error: {e}")
+    
+    def _refresh_audio_devices(self):
+        """Refresh the list of available audio devices"""
+        try:
+            devices = self.voice_recognizer.list_audio_devices()
+            device_list = []
+            device_values = []
+            
+            # Add default device option
+            device_list.append("Default Device")
+            device_values.append("")
+            
+            # Add all available devices
+            for device in devices:
+                device_name = f"{device['index']}: {device['name']}"
+                device_list.append(device_name)
+                device_values.append(str(device['index']))
+                
+                # Auto-select eMeet device if available
+                if 'emeet' in device['name'].lower() or 'm0' in device['name'].lower():
+                    self.audio_device_var.set(device_name)
+            
+            # Update combobox
+            self.audio_device_combo['values'] = device_list
+            self.device_values = device_values  # Store for mapping
+            
+            # Set current device if configured
+            current_device = self.config.get('audio.input_device', None)
+            if current_device is not None:
+                for i, device in enumerate(devices):
+                    if device['index'] == current_device:
+                        self.audio_device_var.set(device_list[i + 1])  # +1 for default option
+                        break
+            
+            self.logger.info(f"Found {len(devices)} audio input devices")
+            
+        except Exception as e:
+            self.logger.error(f"Error refreshing audio devices: {e}")
+            messagebox.showerror("Error", f"Could not refresh audio devices: {e}")
+    
+    def _get_selected_device_index(self):
+        """Get the index of the currently selected audio device"""
+        try:
+            selected = self.audio_device_var.get()
+            if selected == "Default Device" or not selected:
+                return None
+            
+            # Extract device index from selection
+            device_index = int(selected.split(':')[0])
+            return device_index
+            
+        except (ValueError, IndexError):
+            return None
