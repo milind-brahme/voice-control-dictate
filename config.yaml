@@ -1,0 +1,80 @@
+# Voice Control and Dictation System Configuration
+
+# Audio Configuration
+audio:
+  sample_rate: 16000
+  chunk_size: 1024
+  channels: 1
+  silence_threshold: 500
+  silence_duration: 2.0
+  min_audio_length: 1.0
+  input_device: null  # null for default, or device index
+
+# Whisper Configuration
+whisper:
+  model_size: "base"  # tiny, base, small, medium, large
+  language: null      # null for auto-detection, or language code like "en"
+  device: "auto"      # auto, cpu, cuda
+
+# Command Configuration
+commands:
+  wake_words:
+    - "activate"
+    - "computer"
+    - "hey assistant"
+  
+  stop_dictation:
+    - "stop dictation"
+    - "end dictation"
+    - "dictation off"
+  
+  start_dictation:
+    - "start dictation"
+    - "begin dictation"
+    - "dictation on"
+  
+  # Custom commands can be added here
+  custom:
+    screenshot:
+      patterns:
+        - "take screenshot"
+        - "capture screen"
+      type: "keystroke"
+      action: "shift+ctrl+alt+r"
+      description: "Take a screenshot"
+      category: "system"
+    
+    terminal:
+      patterns:
+        - "open terminal"
+        - "open console"
+      type: "command"
+      action: "gnome-terminal"
+      description: "Open terminal"
+      category: "applications"
+
+# GUI Configuration
+gui:
+  theme: "dark"  # light, dark
+  always_on_top: true
+  start_minimized: false
+  show_in_taskbar: true
+
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  file: "voice_control.log"
+  max_file_size: "10MB"
+  backup_count: 5
+
+# Platform-specific settings
+platform:
+  linux:
+    compositor: "x11"  # x11, wayland
+    desktop_environment: "auto"  # auto, gnome, kde, xfce
+  
+  windows:
+    compatibility_mode: false
+  
+  macos:
+    accessibility_permissions: true

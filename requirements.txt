@@ -1,0 +1,30 @@
+# Core dependencies
+openai-whisper>=20231117
+torch>=2.0.0
+torchaudio>=2.0.0
+numpy>=1.21.0
+PyYAML>=6.0
+
+# Audio processing
+pyaudio>=0.2.11
+soundfile>=0.12.1
+
+# Cross-platform GUI and automation
+pynput>=1.7.6
+tkinter
+
+# Platform-specific dependencies (Linux)
+python-xlib>=0.33; sys_platform == "linux"
+evdev>=1.6.0; sys_platform == "linux"
+
+# Platform-specific dependencies (Windows)
+pywin32>=306; sys_platform == "win32"
+pygetwindow>=0.0.9; sys_platform == "win32"
+
+# Platform-specific dependencies (macOS)
+pyobjc-framework-Quartz>=9.0; sys_platform == "darwin"
+pyobjc-framework-ApplicationServices>=9.0; sys_platform == "darwin"
+
+# Optional dependencies
+requests>=2.28.0
+asyncio-mqtt>=0.11.1
