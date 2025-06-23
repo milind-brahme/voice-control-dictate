@@ -12,6 +12,11 @@ from typing import Dict, List, Optional, Union
 # Platform-specific imports
 system = platform.system().lower()
 
+# Initialize variables that will be set conditionally
+Key = None
+KeyCode = None
+pynput = None
+
 if system == "linux":
     try:
         import pynput
@@ -24,9 +29,13 @@ if system == "linux":
         from Xlib.protocol import rq
     except ImportError as e:
         logging.warning(f"Linux dependencies not available: {e}")
+        pynput = None
 
 elif system == "windows":
     try:
+        import pynput
+        from pynput import keyboard as pynput_keyboard
+        from pynput.keyboard import Key, KeyCode
         import win32api
         import win32con
         import win32gui
@@ -35,6 +44,7 @@ elif system == "windows":
         from ctypes import wintypes
     except ImportError as e:
         logging.warning(f"Windows dependencies not available: {e}")
+        pynput = None
 
 elif system == "darwin":  # macOS
     try:
@@ -44,11 +54,13 @@ elif system == "darwin":  # macOS
         import subprocess
     except ImportError as e:
         logging.warning(f"macOS dependencies not available: {e}")
+        pynput = None
 
 class KeystrokeManager:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.system = platform.system().lower()
+        self.controller = None
         
         # Initialize platform-specific components
         if self.system == "linux":
@@ -58,23 +70,34 @@ class KeystrokeManager:
         elif self.system == "darwin":
             self._init_macos()
         else:
-            raise RuntimeError(f"Unsupported platform: {self.system}")
+            self.logger.warning(f"Unsupported platform: {self.system}")
             
         # Common key mappings
         self.key_mappings = self._build_key_mappings()
         
     def _init_linux(self):
         """Initialize Linux-specific components"""
+        if pynput is None:
+            self.logger.error("pynput not available for Linux")
+            self.controller = None
+            return
+            
         try:
             self.display = display.Display()
             self.controller = pynput.keyboard.Controller()
             self.logger.info("Linux keystroke manager initialized")
         except Exception as e:
             self.logger.error(f"Failed to initialize Linux components: {e}")
-            raise
+            self.controller = None
+            # Don't raise - allow the app to continue without keystroke functionality
     
     def _init_windows(self):
         """Initialize Windows-specific components"""
+        if pynput is None:
+            self.logger.error("pynput not available for Windows")
+            self.controller = None
+            return
+            
         try:
             # Get user32 and kernel32 for low-level operations
             self.user32 = ctypes.windll.user32
@@ -83,19 +106,29 @@ class KeystrokeManager:
             self.logger.info("Windows keystroke manager initialized")
         except Exception as e:
             self.logger.error(f"Failed to initialize Windows components: {e}")
-            raise
+            self.controller = None
     
     def _init_macos(self):
         """Initialize macOS-specific components"""
+        if pynput is None:
+            self.logger.error("pynput not available for macOS")
+            self.controller = None
+            return
+            
         try:
             self.controller = pynput.keyboard.Controller()
             self.logger.info("macOS keystroke manager initialized")
         except Exception as e:
             self.logger.error(f"Failed to initialize macOS components: {e}")
-            raise
+            self.controller = None
     
-    def _build_key_mappings(self) -> Dict[str, Union[str, Key]]:
+    def _build_key_mappings(self) -> Dict[str, Union[str, object]]:
         """Build key mappings for special keys"""
+        # Check if Key is available
+        if 'Key' not in globals() or Key is None:
+            self.logger.warning("Key mappings not available - pynput Key not imported")
+            return {}
+            
         mappings = {
             'enter': Key.enter,
             'return': Key.enter,
@@ -129,6 +162,10 @@ class KeystrokeManager:
     
     async def type_text(self, text: str, delay: float = 0.01):
         """Type text character by character with optional delay"""
+        if self.controller is None:
+            self.logger.warning("Controller not available, cannot type text")
+            return
+            
         try:
             self.logger.debug(f"Typing text: {text[:50]}...")
             
@@ -142,6 +179,10 @@ class KeystrokeManager:
     
     def _type_text_sync(self, text: str, delay: float):
         """Synchronous text typing implementation"""
+        if self.controller is None:
+            self.logger.warning("Controller not available, cannot type text")
+            return
+            
         for char in text:
             try:
                 self.controller.type(char)
@@ -152,12 +193,16 @@ class KeystrokeManager:
     
     async def send_key(self, key: str, modifiers: Optional[List[str]] = None):
         """Send a single key with optional modifiers"""
+        if self.controller is None:
+            self.logger.warning("Controller not available, cannot send key")
+            return
+            
         try:
             # Parse key
             if key.lower() in self.key_mappings:
                 key_obj = self.key_mappings[key.lower()]
             else:
-                key_obj = KeyCode.from_char(key) if len(key) == 1 else key
+                key_obj = KeyCode.from_char(key) if len(key) == 1 and KeyCode is not None else key
             
             # Parse modifiers
             modifier_keys = []
@@ -178,6 +223,10 @@ class KeystrokeManager:
     
     def _send_key_sync(self, key, modifiers):
         """Synchronous key sending implementation"""
+        if self.controller is None:
+            self.logger.warning("Controller not available, cannot send key")
+            return
+            
         try:
             # Press modifiers
             for mod in modifiers:
