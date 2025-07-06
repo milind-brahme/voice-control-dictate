@@ -272,13 +272,21 @@ class CommandProcessor:
         action_data = cmd_data.get('action', '')
         
         if action_type == 'keystroke':
-            return lambda: self.keystroke_manager.send_key_combination(action_data)
+            async def handler():
+                await self.keystroke_manager.send_key_combination(action_data)
+            return handler
         elif action_type == 'type':
-            return lambda: self.keystroke_manager.type_text(action_data)
+            async def handler():
+                await self.keystroke_manager.type_text(action_data)
+            return handler
         elif action_type == 'command':
-            return lambda: subprocess.run(action_data, shell=True)
+            def handler():
+                return subprocess.run(action_data, shell=True)
+            return handler
         else:
-            return lambda: self.logger.warning(f"Unknown command type: {action_type}")
+            def handler():
+                self.logger.warning(f"Unknown command type: {action_type}")
+            return handler
     
     async def process_command(self, text: str):
         """Process a voice command"""
@@ -302,6 +310,12 @@ class CommandProcessor:
             key_command_executed = await self._check_press_key_commands(text)
             if key_command_executed:
                 self.logger.info(f"Key command executed successfully for: '{text}'")
+                return
+            
+            # Check for custom commands during dictation
+            custom_command_executed = await self._check_custom_commands_in_dictation(text)
+            if custom_command_executed:
+                self.logger.info(f"Custom command executed successfully for: '{text}'")
                 return
             
             # Otherwise, type the text
@@ -616,5 +630,39 @@ class CommandProcessor:
                 except Exception as e:
                     self.logger.error(f"Error executing press key command '{key_name}': {e}")
                     return False
+        
+        return False
+    
+    async def _check_custom_commands_in_dictation(self, text: str) -> bool:
+        """Check if the text matches any custom commands during dictation mode"""
+        text_lower = text.lower().strip()
+        
+        # Iterate through all registered commands to find custom ones
+        for command_name, command in self.commands.items():
+            # Only check custom commands or commands with 'dictation' category
+            if command.category not in ['custom', 'dictation']:
+                continue
+                
+            # Check if any pattern matches
+            for pattern in command.patterns:
+                pattern_lower = pattern.lower()
+                
+                # Check for exact match or if the pattern is contained in the text
+                if pattern_lower == text_lower or pattern_lower in text_lower:
+                    self.logger.info(f"Custom command matched during dictation: '{pattern}' -> '{command.description}'")
+                    
+                    try:
+                        # Execute the custom command
+                        if asyncio.iscoroutinefunction(command.handler):
+                            await command.handler()
+                        else:
+                            result = command.handler()
+                            if asyncio.iscoroutine(result):
+                                await result
+                        
+                        return True
+                    except Exception as e:
+                        self.logger.error(f"Error executing custom command '{pattern}': {e}")
+                        return False
         
         return False

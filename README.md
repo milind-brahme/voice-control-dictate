@@ -118,6 +118,33 @@ In dictation mode, everything you say is converted to text and typed automatical
 
 These commands are recognized and executed as key presses instead of being typed as text, allowing seamless integration of commands within your dictation workflow.
 
+#### Custom Dictation Commands
+
+**NEW FEATURE**: Create custom voice shortcuts that insert predefined text during dictation mode. Simply say the trigger phrase and the system will type your predefined text instead of the spoken words.
+
+**Example custom commands (configured in `config.yaml`):**
+- "insert signature" - Types your email signature
+- "insert my address" - Types your home address  
+- "meeting introduction" - Types a meeting opener
+- "lorem ipsum" - Types placeholder text
+- "todo comment" - Inserts code comment template
+
+Configure custom commands in `config.yaml`:
+```yaml
+commands:
+  custom:
+    email_signature:
+      patterns:
+        - "insert signature"
+        - "email signature"
+      type: "type"
+      action: "Best regards,\nYour Name\nemail@example.com"
+      description: "Insert email signature"
+      category: "dictation"
+```
+
+**How it works:** While in dictation mode, if you say any of the configured patterns (like "insert signature"), the system will recognize it as a command and execute the associated action (typing the predefined text) instead of typing the spoken words.
+
 ### Configuration
 
 Edit `config.yaml` to customize:
@@ -163,7 +190,36 @@ commands:
       type: "keystroke"
       action: "shift+ctrl+alt+r"
       description: "Take a screenshot"
+      category: "custom"
+    
+    email_signature:
+      patterns:
+        - "insert signature"
+        - "email signature"
+        - "add my signature"
+      type: "type"
+      action: "Best regards,\nYour Name\nEmail: your.email@example.com\nPhone: (555) 123-4567"
+      description: "Insert email signature"
+      category: "dictation"
+    
+    meeting_intro:
+      patterns:
+        - "meeting introduction"
+        - "intro text"
+      type: "type"
+      action: "Good morning everyone, thank you for joining today's meeting."
+      description: "Insert meeting introduction"
+      category: "dictation"
 ```
+
+**Command Types:**
+- `keystroke`: Send key combinations (works in both command and dictation mode)
+- `type`: Type predefined text (perfect for dictation shortcuts)
+- `command`: Run system commands
+
+**Categories:**
+- `custom`: Regular voice commands (require wake word like "activate take screenshot")
+- `dictation`: Dictation shortcuts (work during dictation mode without wake words)
 
 ## Architecture
 

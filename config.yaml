@@ -9,6 +9,69 @@ audio:
   vad_aggressiveness: 1
   vad_padding_ms: 300
 commands:
+  custom:
+    address:
+      action: '123 Main Street
+
+        City, State 12345
+
+        United States'
+      category: dictation
+      description: Insert home address
+      patterns:
+      - insert my address
+      - type my address
+      - home address
+      type: type
+    code_comment:
+      action: '# TODO: Implement this functionality
+
+        # Author: Your Name
+
+        # Date: '
+      category: dictation
+      description: Insert code comment template
+      patterns:
+      - todo comment
+      - insert todo
+      - add todo
+      type: type
+    email_signature:
+      action: 'Best regards,
+
+        Your Name
+
+        Email: your.email@example.com
+
+        Phone: (555) 123-4567'
+      category: dictation
+      description: Insert email signature
+      patterns:
+      - insert signature
+      - add my signature
+      - email signature
+      type: type
+    lorem_ipsum:
+      action: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod
+        tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam,
+        quis nostrud exercitation.
+      category: dictation
+      description: Insert Lorem Ipsum placeholder text
+      patterns:
+      - lorem ipsum
+      - placeholder text
+      - dummy text
+      type: type
+    meeting_intro:
+      action: Good morning everyone, thank you for joining today's meeting. Let's
+        begin by reviewing our agenda items.
+      category: dictation
+      description: Insert meeting introduction text
+      patterns:
+      - meeting introduction
+      - intro text
+      - meeting opener
+      type: type
   start_dictation:
   - start dictation
   - begin dictation
@@ -19,59 +82,6 @@ commands:
   - activate
   - computer
   - hey assistant
-  
-  # Custom dictation shortcuts - predefined text that gets typed
-  custom:
-    email_signature:
-      patterns:
-        - "insert signature"
-        - "add my signature"
-        - "email signature"
-      type: "type"
-      action: "Best regards,\nYour Name\nEmail: your.email@example.com\nPhone: (555) 123-4567"
-      description: "Insert email signature"
-      category: "dictation"
-    
-    address:
-      patterns:
-        - "insert my address"
-        - "type my address"
-        - "home address"
-      type: "type"
-      action: "123 Main Street\nCity, State 12345\nUnited States"
-      description: "Insert home address"
-      category: "dictation"
-    
-    meeting_intro:
-      patterns:
-        - "meeting introduction"
-        - "intro text"
-        - "meeting opener"
-      type: "type"
-      action: "Good morning everyone, thank you for joining today's meeting. Let's begin by reviewing our agenda items."
-      description: "Insert meeting introduction text"
-      category: "dictation"
-    
-    code_comment:
-      patterns:
-        - "todo comment"
-        - "insert todo"
-        - "add todo"
-      type: "type"
-      action: "# TODO: Implement this functionality\n# Author: Your Name\n# Date: "
-      description: "Insert code comment template"
-      category: "dictation"
-    
-    lorem_ipsum:
-      patterns:
-        - "lorem ipsum"
-        - "placeholder text"
-        - "dummy text"
-      type: "type"
-      action: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation."
-      description: "Insert Lorem Ipsum placeholder text"
-      category: "dictation"
-
 whisper:
   beam_size: 5
   best_of: 5
