@@ -4,11 +4,15 @@ A comprehensive voice control and dictation system using OpenAI Whisper for spee
 
 ## Features
 
-- **High-Quality Speech Recognition**: Uses OpenAI Whisper for accurate speech-to-text conversion
+- **High-Quality Speech Recognition**: Uses OpenAI Whisper or Faster-Whisper for accurate speech-to-text conversion
+- **Enhanced Performance**: Supports Faster-Whisper for 2-4x speed improvement with same accuracy
+- **Advanced Models**: Supports all Whisper models including large-v3 for best accuracy
+- **GPU Acceleration**: Optimized CUDA support for RTX GPUs with float16 precision
 - **Cross-Platform Support**: Works on Linux, Windows, and macOS
 - **Bulletproof Keystroke Automation**: Reliable keystroke sending to any window or application
 - **Voice Dictation**: Real-time text dictation in any application
 - **Voice Commands**: Comprehensive set of voice commands for desktop automation
+- **Press Key Commands**: Execute key commands during dictation without interruption
 - **GUI Interface**: User-friendly graphical interface for easy control
 - **CLI Support**: Command-line interface for headless operation
 - **Customizable Commands**: Easy configuration of custom voice commands
@@ -100,14 +104,53 @@ In dictation mode, everything you say is converted to text and typed automatical
 2. Speak naturally - your speech will be converted to text
 3. Say "stop dictation" to return to command mode
 
+#### Press Key Commands During Dictation
+
+**NEW FEATURE**: While in dictation mode, you can execute key commands without interrupting the dictation flow:
+
+- "press key enter" - Press Enter key
+- "press tab" - Press Tab key  
+- "hit key backspace" - Press Backspace
+- "key escape" - Press Escape
+- "press ctrl c" - Press Ctrl+C
+- "press shift enter" - Press Shift+Enter
+- "hit delete key" - Press Delete
+
+These commands are recognized and executed as key presses instead of being typed as text, allowing seamless integration of commands within your dictation workflow.
+
 ### Configuration
 
 Edit `config.yaml` to customize:
 
-- **Audio settings**: Sample rate, silence detection
-- **Whisper model**: Model size (tiny, base, small, medium, large)
+- **Audio settings**: Sample rate, silence detection, VAD sensitivity
+- **Whisper engine**: Choose between 'openai-whisper' or 'faster-whisper'
+- **Whisper model**: Model size (tiny, base, small, medium, large, large-v3)
+- **GPU optimization**: CUDA device, compute type (float16/float32)
 - **Wake words**: Customize activation phrases
 - **Custom commands**: Add your own voice commands
+
+Example configuration:
+```yaml
+audio:
+  sample_rate: 16000
+  silence_threshold: 300
+  vad_aggressiveness: 1
+
+whisper:
+  engine: faster-whisper    # Use faster-whisper for better performance
+  model_size: large-v3      # Best accuracy model
+  device: cuda              # Use GPU acceleration
+  compute_type: float16     # Optimize for modern GPUs
+  language: en              # Set language for better accuracy
+  beam_size: 5              # Higher beam size for better accuracy
+  best_of: 5                # Generate multiple candidates
+
+commands:
+  wake_words:
+    - activate
+    - computer
+    - hey assistant
+```
 
 Example custom command:
 ```yaml
@@ -209,14 +252,35 @@ processor._register_command(Command(...))
 ### Performance Optimization
 
 1. **Faster recognition**:
-   - Use smaller Whisper models (tiny, base)
-   - Reduce audio sample rate
-   - Use GPU acceleration if available
+   - Use Faster-Whisper engine for 2-4x speed improvement
+   - Use larger models (large-v3) for better accuracy without speed penalty
+   - Enable CUDA GPU acceleration
+   - Use float16 compute type for modern GPUs
+   - Set specific language (e.g., 'en') instead of auto-detection
 
-2. **Lower memory usage**:
-   - Use "tiny" Whisper model
+2. **Best accuracy**:
+   - Use `large-v3` model size (latest and most accurate)
+   - Set `beam_size: 5` and `best_of: 5` for better results
+   - Use Faster-Whisper with `compute_type: float16`
+   - Ensure good microphone and minimize background noise
+
+3. **Lower memory usage**:
+   - Use smaller models (tiny, base, small)
+   - Use `compute_type: int8` instead of float16
    - Reduce audio buffer sizes
    - Close unnecessary applications
+
+**Recommended Settings for RTX GPUs:**
+```yaml
+whisper:
+  engine: faster-whisper
+  model_size: large-v3
+  device: cuda
+  compute_type: float16
+  language: en
+  beam_size: 5
+  best_of: 5
+```
 
 ## Contributing
 

@@ -72,9 +72,9 @@ class Config:
         
         # Validate Whisper model
         whisper = self.config_data.get('whisper', {})
-        valid_models = ['tiny', 'base', 'small', 'medium', 'large']
+        valid_models = ['tiny', 'base', 'small', 'medium', 'large', 'large-v2', 'large-v3']
         if whisper.get('model_size') not in valid_models:
-            self.logger.warning(f"Invalid model size, using 'base'")
+            self.logger.warning(f"Invalid model size '{whisper.get('model_size')}', using 'base'")
             self.config_data.setdefault('whisper', {})['model_size'] = 'base'
     
     def get(self, key: str, default: Any = None) -> Any:

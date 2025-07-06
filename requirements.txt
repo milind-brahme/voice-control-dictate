@@ -1,5 +1,6 @@
 # Core dependencies
 openai-whisper>=20231117
+faster-whisper>=0.10.0
 torch>=2.0.0
 torchaudio>=2.0.0
 numpy>=1.21.0

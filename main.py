@@ -91,7 +91,9 @@ async def main():
             logger.info("Starting Voice Control System in CLI mode")
             
             if args.dictation_mode:
-                await run_dictation_mode(voice_recognizer, keystroke_manager)
+                # Enable dictation mode in command processor
+                command_processor.dictation_mode = True
+                await run_enhanced_dictation_mode(voice_recognizer, command_processor)
             else:
                 await run_command_mode(voice_recognizer, command_processor)
                 
@@ -111,6 +113,20 @@ async def run_dictation_mode(voice_recognizer, keystroke_manager):
                 await keystroke_manager.type_text(text)
     except KeyboardInterrupt:
         logger.info("Dictation mode stopped by user")
+
+async def run_enhanced_dictation_mode(voice_recognizer, command_processor):
+    """Run in enhanced dictation mode with press key command support"""
+    logger = logging.getLogger(__name__)
+    logger.info("Starting enhanced dictation mode with press key command support. Press Ctrl+C to stop.")
+    logger.info("You can say 'press key enter', 'press tab', 'hit escape', etc. during dictation")
+    
+    try:
+        async for text in voice_recognizer.continuous_recognition():
+            if text.strip():
+                logger.info(f"Processing: {text}")
+                await command_processor.process_command(text)
+    except KeyboardInterrupt:
+        logger.info("Enhanced dictation mode stopped by user")
 
 async def run_command_mode(voice_recognizer, command_processor):
     """Run in command recognition mode"""

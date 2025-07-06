@@ -291,12 +291,21 @@ class CommandProcessor:
         
         # Check if in dictation mode
         if self.dictation_mode:
+            self.logger.info(f"Dictation mode: Processing '{text}'")
+            
             # Check for stop dictation commands
             if any(stop_word in text for stop_word in self.stop_dictation_words):
                 await self._stop_dictation()
                 return
             
+            # Check for "press key" commands during dictation
+            key_command_executed = await self._check_press_key_commands(text)
+            if key_command_executed:
+                self.logger.info(f"Key command executed successfully for: '{text}'")
+                return
+            
             # Otherwise, type the text
+            self.logger.info(f"Typing as dictation text: '{text}'")
             await self.keystroke_manager.type_text(text + " ")
             return
           # Check for wake word activation
@@ -560,3 +569,52 @@ class CommandProcessor:
             self.logger.info(f"Pressed key: {key}")
         except Exception as e:
             self.logger.error(f"Failed to press key '{key}': {e}")
+    
+    async def _check_press_key_commands(self, text: str) -> bool:
+        """
+        Check if the text contains a "press key" command during dictation mode.
+        Returns True if a key command was executed, False otherwise.
+        """
+        text_lower = text.lower().strip()
+        
+        # Define more specific patterns for "press key" commands to avoid false positives
+        # These patterns handle punctuation and are more flexible
+        press_key_patterns = [
+            r"press key (.+?)\.?$",        # "press key enter" or "press key enter."
+            r"press (.+?) key\.?$",        # "press enter key" or "press enter key."
+            r"hit key (.+?)\.?$",          # "hit key backspace" or "hit key backspace."
+            r"hit (.+?) key\.?$",          # "hit escape key" or "hit escape key."
+            r"^key (.+?)\.?$",             # "key tab" or "key tab."
+            r"^press (enter|tab|space|escape|backspace|delete|home|end|up|down|left|right|page up|page down|f\d+)\.?$",  # Direct key commands
+            r"^hit (enter|tab|space|escape|backspace|delete|home|end|up|down|left|right|page up|page down|f\d+)\.?$",    # "hit enter", "hit tab", etc.
+            r"press (ctrl|shift|alt) (.+?)\.?$",  # "press ctrl c", "press shift tab", etc.
+            r"hit (ctrl|shift|alt) (.+?)\.?$",    # "hit ctrl c", "hit shift tab", etc.
+        ]
+        
+        for pattern in press_key_patterns:
+            match = re.search(pattern, text_lower, re.IGNORECASE)
+            if match:
+                # Handle different pattern groups
+                if "ctrl" in pattern or "shift" in pattern or "alt" in pattern:
+                    # For modifier patterns like "press ctrl c"
+                    if match.lastindex == 2:
+                        modifier = match.group(1).strip()
+                        key = match.group(2).strip().rstrip('.')
+                        key_name = f"{modifier} {key}"
+                    else:
+                        key_name = match.group(1).strip().rstrip('.')
+                else:
+                    # For regular patterns
+                    key_name = match.group(1).strip().rstrip('.')
+                
+                self.logger.info(f"Detected press key command during dictation: '{key_name}'")
+                
+                try:
+                    # Execute the key press
+                    await self._press_key(key_name)
+                    return True
+                except Exception as e:
+                    self.logger.error(f"Error executing press key command '{key_name}': {e}")
+                    return False
+        
+        return False

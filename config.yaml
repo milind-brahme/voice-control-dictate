@@ -1,4 +1,82 @@
 audio:
+  channels: 1
+  chunk_size: 1024
   input_device: 4
+  min_audio_length: 0.5
+  sample_rate: 16000
+  silence_duration: 1.5
+  silence_threshold: 300
+  vad_aggressiveness: 1
+  vad_padding_ms: 300
+commands:
+  start_dictation:
+  - start dictation
+  - begin dictation
+  stop_dictation:
+  - stop dictation
+  - end dictation
+  wake_words:
+  - activate
+  - computer
+  - hey assistant
+  
+  # Custom dictation shortcuts - predefined text that gets typed
+  custom:
+    email_signature:
+      patterns:
+        - "insert signature"
+        - "add my signature"
+        - "email signature"
+      type: "type"
+      action: "Best regards,\nYour Name\nEmail: your.email@example.com\nPhone: (555) 123-4567"
+      description: "Insert email signature"
+      category: "dictation"
+    
+    address:
+      patterns:
+        - "insert my address"
+        - "type my address"
+        - "home address"
+      type: "type"
+      action: "123 Main Street\nCity, State 12345\nUnited States"
+      description: "Insert home address"
+      category: "dictation"
+    
+    meeting_intro:
+      patterns:
+        - "meeting introduction"
+        - "intro text"
+        - "meeting opener"
+      type: "type"
+      action: "Good morning everyone, thank you for joining today's meeting. Let's begin by reviewing our agenda items."
+      description: "Insert meeting introduction text"
+      category: "dictation"
+    
+    code_comment:
+      patterns:
+        - "todo comment"
+        - "insert todo"
+        - "add todo"
+      type: "type"
+      action: "# TODO: Implement this functionality\n# Author: Your Name\n# Date: "
+      description: "Insert code comment template"
+      category: "dictation"
+    
+    lorem_ipsum:
+      patterns:
+        - "lorem ipsum"
+        - "placeholder text"
+        - "dummy text"
+      type: "type"
+      action: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation."
+      description: "Insert Lorem Ipsum placeholder text"
+      category: "dictation"
+
 whisper:
-  model_size: base
+  beam_size: 5
+  best_of: 5
+  compute_type: float16
+  device: cuda
+  engine: faster-whisper
+  language: en
+  model_size: large-v3
